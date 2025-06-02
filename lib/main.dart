@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'dart:async';
 import 'services/location_service.dart';
 import 'services/weather_service.dart';
@@ -1222,6 +1223,39 @@ class _HomePageState extends State<HomePage>
       return Column(
         children: [
           _locationHeader(),
+          // Temperature Chart Section
+          Container(
+            margin: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.95),
+              borderRadius: BorderRadius.circular(16.0),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  spreadRadius: 1,
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '24-Hour Temperature Trend',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(height: 200, child: _buildTemperatureChart()),
+              ],
+            ),
+          ),
+          // Detailed Hourly Forecast Cards
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(
@@ -1473,6 +1507,181 @@ class _HomePageState extends State<HomePage>
       default:
         return '🌤️';
     }
+  }
+
+  // Build temperature chart for the Today tab
+  Widget _buildTemperatureChart() {
+    if (_weatherData == null ||
+        _weatherData!.hourlyForecast == null ||
+        _weatherData!.hourlyForecast!.isEmpty) {
+      return const Center(
+        child: Text(
+          'No temperature data available',
+          style: TextStyle(color: Colors.grey),
+        ),
+      );
+    }
+
+    final spots = <FlSpot>[];
+    final labels = <String>[];
+
+    // Take up to 24 hours of data for the chart
+    final dataToShow = _weatherData!.hourlyForecast!.take(24).toList();
+
+    for (int i = 0; i < dataToShow.length; i++) {
+      final hourlyData = dataToShow[i];
+      spots.add(FlSpot(i.toDouble(), hourlyData.temperature));
+      labels.add('${hourlyData.time.hour.toString().padLeft(2, '0')}:00');
+    }
+
+    if (spots.isEmpty) {
+      return const Center(
+        child: Text(
+          'No temperature data to display',
+          style: TextStyle(color: Colors.grey),
+        ),
+      );
+    }
+
+    // Calculate min and max temperatures for better chart scaling
+    final temperatures = spots.map((spot) => spot.y).toList();
+    final minTemp = temperatures.reduce((a, b) => a < b ? a : b);
+    final maxTemp = temperatures.reduce((a, b) => a > b ? a : b);
+    final tempRange = maxTemp - minTemp;
+    final margin = tempRange * 0.1; // 10% margin for better visualization
+
+    return LineChart(
+      LineChartData(
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: true,
+          drawHorizontalLine: true,
+          horizontalInterval: tempRange > 0 ? tempRange / 4 : 5,
+          verticalInterval: dataToShow.length > 12 ? 4 : 2,
+          getDrawingHorizontalLine: (value) {
+            return const FlLine(color: Colors.grey, strokeWidth: 0.5);
+          },
+          getDrawingVerticalLine: (value) {
+            return const FlLine(color: Colors.grey, strokeWidth: 0.5);
+          },
+        ),
+        titlesData: FlTitlesData(
+          show: true,
+          rightTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+          topTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 30,
+              interval: dataToShow.length > 12 ? 4 : 2,
+              getTitlesWidget: (double value, TitleMeta meta) {
+                final index = value.toInt();
+                if (index >= 0 && index < labels.length) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Text(
+                      labels[index],
+                      style: const TextStyle(
+                        color: Colors.grey,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 10,
+                      ),
+                    ),
+                  );
+                }
+                return const Text('');
+              },
+            ),
+          ),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              interval: tempRange > 0 ? tempRange / 4 : 5,
+              reservedSize: 40,
+              getTitlesWidget: (double value, TitleMeta meta) {
+                return Text(
+                  '${value.toInt()}°',
+                  style: const TextStyle(
+                    color: Colors.grey,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 10,
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+        borderData: FlBorderData(
+          show: true,
+          border: Border.all(color: Colors.grey.withOpacity(0.3)),
+        ),
+        minX: 0,
+        maxX: (dataToShow.length - 1).toDouble(),
+        minY: minTemp - margin,
+        maxY: maxTemp + margin,
+        lineBarsData: [
+          LineChartBarData(
+            spots: spots,
+            isCurved: true,
+            gradient: LinearGradient(
+              colors: [
+                Colors.blue.withOpacity(0.8),
+                Colors.lightBlue.withOpacity(0.8),
+              ],
+            ),
+            barWidth: 3,
+            isStrokeCapRound: true,
+            dotData: FlDotData(
+              show: true,
+              getDotPainter:
+                  (spot, percent, barData, index) => FlDotCirclePainter(
+                    radius: 4,
+                    color: Colors.blue,
+                    strokeWidth: 2,
+                    strokeColor: Colors.white,
+                  ),
+            ),
+            belowBarData: BarAreaData(
+              show: true,
+              gradient: LinearGradient(
+                colors: [
+                  Colors.blue.withOpacity(0.3),
+                  Colors.blue.withOpacity(0.1),
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+          ),
+        ],
+        lineTouchData: LineTouchData(
+          enabled: true,
+          touchTooltipData: LineTouchTooltipData(
+            getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
+              return touchedBarSpots.map((barSpot) {
+                final index = barSpot.x.toInt();
+                if (index >= 0 && index < labels.length) {
+                  return LineTooltipItem(
+                    '${labels[index]}\n${barSpot.y.toStringAsFixed(1)}°C',
+                    const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  );
+                }
+                return null;
+              }).toList();
+            },
+            getTooltipColor: (touchedSpot) => Colors.blue.withOpacity(0.8),
+          ),
+        ),
+      ),
+    );
   }
 
   // Build content for "Weekly" tab
