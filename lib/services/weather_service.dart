@@ -238,8 +238,26 @@ class WeatherService {
         final suggestions =
             data.map((json) => CitySuggestion.fromJson(json)).toList();
 
+        // Debug: Print original suggestions
+        print('Debug: Original API returned ${suggestions.length} suggestions');
+        for (var i = 0; i < suggestions.length && i < 10; i++) {
+          print(
+            '  $i: ${suggestions[i].name}, ${suggestions[i].region ?? 'No region'}, ${suggestions[i].country}',
+          );
+        }
+
         // Remove duplicates and improve relevance
-        return _filterAndRankSuggestions(suggestions, cleanQuery);
+        final filtered = _filterAndRankSuggestions(suggestions, cleanQuery);
+
+        // Debug: Print final filtered suggestions
+        print('Debug: Final filtered list has ${filtered.length} suggestions');
+        for (var i = 0; i < filtered.length; i++) {
+          print(
+            '  $i: ${filtered[i].name}, ${filtered[i].region ?? 'No region'}, ${filtered[i].country}',
+          );
+        }
+
+        return filtered;
       } else {
         throw Exception(
           'Failed to load city suggestions: ${response.statusCode}',
@@ -278,16 +296,45 @@ class WeatherService {
 
     // Convert to list and sort by relevance
     final filteredList = uniqueMap.values.toList();
-
     filteredList.sort(
       (a, b) => _calculateRelevanceScore(
         b,
         query,
       ).compareTo(_calculateRelevanceScore(a, query)),
-    );
+    ); // Final deduplication by city name and country to avoid similar cities
+    final finalUniqueList = <CitySuggestion>[];
+    final cityCountryTracker = <String, bool>{};
 
-    // Return only the top results according to _maxResults
-    return filteredList.take(_maxResults).toList();
+    for (final suggestion in filteredList) {
+      final normalizedCityName = _normalizeCityName(suggestion.name);
+      final cityCountryKey =
+          '${normalizedCityName}_${suggestion.country.toLowerCase().trim()}';
+
+      if (!cityCountryTracker.containsKey(cityCountryKey)) {
+        cityCountryTracker[cityCountryKey] = true;
+        finalUniqueList.add(suggestion);
+
+        // Stop when we reach the maximum number of results
+        if (finalUniqueList.length >= _maxResults) {
+          break;
+        }
+      }
+    }
+
+    return finalUniqueList;
+  }
+
+  /// Normalizes city names to catch similar variations
+  String _normalizeCityName(String cityName) {
+    return cityName
+        .toLowerCase()
+        .trim()
+        .replaceAll(RegExp(r'[^\w\s]'), '') // Remove special characters
+        .replaceAll(RegExp(r'\s+'), ' ') // Normalize spaces
+        .replaceAll('saint', 'st')
+        .replaceAll('sainte', 'st')
+        .replaceAll('mount', 'mt')
+        .replaceAll('fort', 'ft');
   }
 
   /// Calculates relevance score for ranking suggestions
