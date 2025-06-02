@@ -110,9 +110,7 @@ class WeatherService {
       Uri.parse(
         '$_oneCallUrl?lat=$lat&lon=$lon&exclude=minutely,hourly,alerts&units=metric&appid=$_apiKey',
       ),
-    );
-
-    // Process hourly forecast data if available
+    ); // Process hourly forecast data if available
     if (hourlyForecastResponse.statusCode == 200) {
       final forecastData = jsonDecode(hourlyForecastResponse.body);
       final List<dynamic> hourlyList = forecastData['list'];
@@ -120,15 +118,17 @@ class WeatherService {
       // Get today's date
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
-      final tomorrow = today.add(Duration(days: 1));
+      final nextDay = today.add(
+        const Duration(days: 1, hours: 6),
+      ); // Extended to early next day
 
-      // Filter for today's forecasts only
+      // Filter for today's and early tomorrow's forecasts (24+ hours total)
       final todayForecasts =
           hourlyList.where((item) {
             final forecastTime = DateTime.fromMillisecondsSinceEpoch(
               item['dt'] * 1000,
             );
-            return forecastTime.isAfter(now) && forecastTime.isBefore(tomorrow);
+            return forecastTime.isAfter(now) && forecastTime.isBefore(nextDay);
           }).toList();
 
       // Convert to hourly forecast objects
@@ -147,6 +147,13 @@ class WeatherService {
           windSpeed: weatherData.windSpeed,
           country: cityInfo['country'],
           region: null, // OpenWeatherMap doesn't provide region info
+          feelsLike: weatherData.feelsLike,
+          visibility: weatherData.visibility,
+          pressure: weatherData.pressure,
+          windDirection: weatherData.windDirection,
+          uvIndex: weatherData.uvIndex,
+          sunrise: weatherData.sunrise,
+          sunset: weatherData.sunset,
           hourlyForecast: hourlyForecasts,
           dailyForecast: weatherData.dailyForecast,
         );
@@ -160,6 +167,13 @@ class WeatherService {
           windSpeed: weatherData.windSpeed,
           country: weatherData.country,
           region: weatherData.region,
+          feelsLike: weatherData.feelsLike,
+          visibility: weatherData.visibility,
+          pressure: weatherData.pressure,
+          windDirection: weatherData.windDirection,
+          uvIndex: weatherData.uvIndex,
+          sunrise: weatherData.sunrise,
+          sunset: weatherData.sunset,
           hourlyForecast: hourlyForecasts,
           dailyForecast: weatherData.dailyForecast,
         );
@@ -177,7 +191,6 @@ class WeatherService {
               .take(7)
               .map((item) => DailyForecast.fromJson(item))
               .toList();
-
       weatherData = WeatherData(
         temperature: weatherData.temperature,
         description: weatherData.description,
@@ -187,6 +200,13 @@ class WeatherService {
         windSpeed: weatherData.windSpeed,
         country: weatherData.country,
         region: weatherData.region,
+        feelsLike: weatherData.feelsLike,
+        visibility: weatherData.visibility,
+        pressure: weatherData.pressure,
+        windDirection: weatherData.windDirection,
+        uvIndex: weatherData.uvIndex,
+        sunrise: weatherData.sunrise,
+        sunset: weatherData.sunset,
         hourlyForecast: weatherData.hourlyForecast,
         dailyForecast: dailyForecasts,
       );

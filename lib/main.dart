@@ -876,7 +876,7 @@ class _HomePageState extends State<HomePage>
         margin: const EdgeInsets.all(16.0),
         child: SingleChildScrollView(
           child: Container(
-            padding: const EdgeInsets.all(32.0),
+            padding: const EdgeInsets.all(24.0),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.95),
               borderRadius: BorderRadius.circular(20.0),
@@ -891,7 +891,7 @@ class _HomePageState extends State<HomePage>
             ),
             child: Column(
               children: [
-                // Location header
+                // Location header with weather icon
                 Container(
                   padding: const EdgeInsets.all(16.0),
                   decoration: BoxDecoration(
@@ -922,12 +922,16 @@ class _HomePageState extends State<HomePage>
                           textAlign: TextAlign.center,
                         ),
                       ),
+                      Text(
+                        _getWeatherEmoji(_weatherData!.icon),
+                        style: const TextStyle(fontSize: 32),
+                      ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
 
-                // Temperature display
+                // Main temperature display
                 Container(
                   padding: const EdgeInsets.all(24.0),
                   decoration: BoxDecoration(
@@ -951,20 +955,32 @@ class _HomePageState extends State<HomePage>
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        _weatherData!.description,
+                        _weatherData!.description.toUpperCase(),
                         style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w500,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
                           color: Colors.orange.shade700,
+                          letterSpacing: 1.2,
                         ),
                         textAlign: TextAlign.center,
                       ),
+                      if (_weatherData!.feelsLike != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Feels like ${_weatherData!.feelsLike!.toStringAsFixed(1)}°C',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.orange.shade600,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
                 const SizedBox(height: 20),
 
-                // Weather details
+                // Detailed weather information grid
                 Container(
                   padding: const EdgeInsets.all(20.0),
                   decoration: BoxDecoration(
@@ -972,69 +988,118 @@ class _HomePageState extends State<HomePage>
                     borderRadius: BorderRadius.circular(16.0),
                     border: Border.all(color: Colors.grey.shade300),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  child: Column(
                     children: [
-                      Column(
+                      // First row - Wind and Humidity
+                      Row(
                         children: [
-                          Icon(
-                            Icons.air,
-                            color: Colors.blue.shade600,
-                            size: 28,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Wind',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade600,
-                              fontWeight: FontWeight.w500,
+                          Expanded(
+                            child: _buildCurrentDetailItem(
+                              icon: Icons.air,
+                              label: 'Wind Speed',
+                              value:
+                                  '${_weatherData!.windSpeed.toStringAsFixed(1)} km/h',
+                              color: Colors.blue,
                             ),
                           ),
-                          Text(
-                            '${_weatherData!.windSpeed} km/h',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildCurrentDetailItem(
+                              icon: Icons.water_drop,
+                              label: 'Humidity',
+                              value: '${_weatherData!.humidity}%',
+                              color: Colors.cyan,
                             ),
                           ),
                         ],
                       ),
-                      Container(
-                        height: 50,
-                        width: 1,
-                        color: Colors.grey.shade300,
-                      ),
-                      Column(
+                      const SizedBox(height: 16),
+
+                      // Second row - Wind Direction and Pressure
+                      Row(
                         children: [
-                          Icon(
-                            Icons.visibility,
-                            color: Colors.green.shade600,
-                            size: 28,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Humidity',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade600,
-                              fontWeight: FontWeight.w500,
+                          Expanded(
+                            child: _buildCurrentDetailItem(
+                              icon: Icons.navigation,
+                              label: 'Wind Direction',
+                              value: _weatherData!.windDirection ?? 'N/A',
+                              color: Colors.purple,
                             ),
                           ),
-                          Text(
-                            '${_weatherData!.humidity}%',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildCurrentDetailItem(
+                              icon: Icons.compress,
+                              label: 'Pressure',
+                              value:
+                                  _weatherData!.pressure != null
+                                      ? '${_weatherData!.pressure} hPa'
+                                      : 'N/A',
+                              color: Colors.teal,
                             ),
                           ),
                         ],
                       ),
+
+                      if (_weatherData!.visibility != null) ...[
+                        const SizedBox(height: 16),
+                        // Third row - Visibility
+                        _buildCurrentDetailItem(
+                          icon: Icons.visibility,
+                          label: 'Visibility',
+                          value:
+                              '${_weatherData!.visibility!.toStringAsFixed(1)} km',
+                          color: Colors.green,
+                        ),
+                      ],
                     ],
                   ),
                 ),
+
+                // Sun times if available
+                if (_weatherData!.sunrise != null &&
+                    _weatherData!.sunset != null) ...[
+                  const SizedBox(height: 20),
+                  Container(
+                    padding: const EdgeInsets.all(20.0),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.amber.shade50, Colors.orange.shade50],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16.0),
+                      border: Border.all(color: Colors.amber.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _buildSunTimeItem(
+                            icon: Icons.wb_sunny,
+                            label: 'Sunrise',
+                            time: _weatherData!.sunrise!,
+                            color: Colors.orange,
+                          ),
+                        ),
+                        const SizedBox(width: 20),
+                        Container(
+                          height: 50,
+                          width: 1,
+                          color: Colors.amber.shade300,
+                        ),
+                        const SizedBox(width: 20),
+                        Expanded(
+                          child: _buildSunTimeItem(
+                            icon: Icons.brightness_3,
+                            label: 'Sunset',
+                            time: _weatherData!.sunset!,
+                            color: Colors.deepOrange,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1043,6 +1108,83 @@ class _HomePageState extends State<HomePage>
     } else {
       return _buildDefaultContent();
     }
+  }
+
+  // Helper method to build detail items for current weather
+  Widget _buildCurrentDetailItem({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12.0),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 32),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade600,
+              fontWeight: FontWeight.w500,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: color.withOpacity(0.8),
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Helper method to build sun time items
+  Widget _buildSunTimeItem({
+    required IconData icon,
+    required String label,
+    required DateTime time,
+    required Color color,
+  }) {
+    final timeString =
+        '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 32),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey.shade600,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          timeString,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: color.withOpacity(0.8),
+          ),
+        ),
+      ],
+    );
   }
 
   // Build content for "Today" tab
@@ -1082,47 +1224,137 @@ class _HomePageState extends State<HomePage>
           _locationHeader(),
           Expanded(
             child: ListView.builder(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8.0,
+                vertical: 8.0,
+              ),
               itemCount: _weatherData!.hourlyForecast!.length,
               itemBuilder: (context, index) {
                 final hourlyData = _weatherData!.hourlyForecast![index];
-                return Card(
-                  margin: const EdgeInsets.symmetric(
-                    vertical: 4,
-                    horizontal: 8,
+                return Container(
+                  margin: const EdgeInsets.symmetric(vertical: 6.0),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.95),
+                    borderRadius: BorderRadius.circular(16.0),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        spreadRadius: 1,
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
                   ),
-                  color: Colors.white.withOpacity(0.9),
-                  elevation: 4,
                   child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          '${hourlyData.time.hour}:00',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        Column(
+                        // Time and main temperature row
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              '${hourlyData.temperature.toStringAsFixed(1)}°C',
-                              style: const TextStyle(color: Colors.black87),
+                              '${hourlyData.time.hour.toString().padLeft(2, '0')}:00',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                                color: Colors.black87,
+                              ),
                             ),
-                            Text(
-                              hourlyData.description,
-                              style: TextStyle(
-                                color: Colors.grey[700],
-                                fontSize: 12,
+                            Row(
+                              children: [
+                                // Weather icon (using emoji representation)
+                                Text(
+                                  _getWeatherEmoji(hourlyData.icon),
+                                  style: const TextStyle(fontSize: 24),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '${hourlyData.temperature.toStringAsFixed(1)}°C',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Weather description
+                        Text(
+                          hourlyData.description.toUpperCase(),
+                          style: TextStyle(
+                            color: Colors.grey[700],
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Detailed weather information in a grid
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildDetailItem(
+                                icon: Icons.water_drop,
+                                label: 'Humidity',
+                                value: '${hourlyData.humidity}%',
+                                color: Colors.blue,
+                              ),
+                            ),
+                            Expanded(
+                              child: _buildDetailItem(
+                                icon: Icons.air,
+                                label: 'Wind',
+                                value:
+                                    '${hourlyData.windSpeed.toStringAsFixed(1)} km/h',
+                                color: Colors.green,
                               ),
                             ),
                           ],
                         ),
-                        Text(
-                          '${hourlyData.windSpeed} km/h',
-                          style: const TextStyle(color: Colors.black87),
+                        const SizedBox(height: 8),
+
+                        // Additional details row
+                        Row(
+                          children: [
+                            if (hourlyData.feelsLike != null)
+                              Expanded(
+                                child: _buildDetailItem(
+                                  icon: Icons.thermostat,
+                                  label: 'Feels like',
+                                  value:
+                                      '${hourlyData.feelsLike!.toStringAsFixed(1)}°C',
+                                  color: Colors.orange,
+                                ),
+                              ),
+                            if (hourlyData.windDirection != null)
+                              Expanded(
+                                child: _buildDetailItem(
+                                  icon: Icons.navigation,
+                                  label: 'Direction',
+                                  value: hourlyData.windDirection!,
+                                  color: Colors.purple,
+                                ),
+                              ),
+                          ],
                         ),
+
+                        if (hourlyData.visibility != null) ...[
+                          const SizedBox(height: 8),
+                          _buildDetailItem(
+                            icon: Icons.visibility,
+                            label: 'Visibility',
+                            value:
+                                '${hourlyData.visibility!.toStringAsFixed(1)} km',
+                            color: Colors.teal,
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -1160,6 +1392,86 @@ class _HomePageState extends State<HomePage>
       );
     } else {
       return _buildDefaultContent();
+    }
+  }
+
+  // Helper method to build detail items for hourly forecast
+  Widget _buildDetailItem({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.black87,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Helper method to get weather emoji from icon code
+  String _getWeatherEmoji(String iconCode) {
+    switch (iconCode) {
+      case '01d': // clear sky day
+        return '☀️';
+      case '01n': // clear sky night
+        return '🌙';
+      case '02d': // few clouds day
+        return '🌤️';
+      case '02n': // few clouds night
+        return '🌙';
+      case '03d':
+      case '03n': // scattered clouds
+        return '☁️';
+      case '04d':
+      case '04n': // broken clouds
+        return '☁️';
+      case '09d':
+      case '09n': // shower rain
+        return '🌦️';
+      case '10d': // rain day
+        return '🌧️';
+      case '10n': // rain night
+        return '🌧️';
+      case '11d':
+      case '11n': // thunderstorm
+        return '⛈️';
+      case '13d':
+      case '13n': // snow
+        return '❄️';
+      case '50d':
+      case '50n': // mist
+        return '🌫️';
+      default:
+        return '🌤️';
     }
   }
 
