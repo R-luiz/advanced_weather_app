@@ -3,9 +3,8 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>$(DEVELOPMENT_LANGUAGE)</string>
-	<key>CFBundleDisplayName</key>
-	<string>Medium Weather App</string>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>	<key>CFBundleDisplayName</key>
+	<string>Advanced Weather App</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
