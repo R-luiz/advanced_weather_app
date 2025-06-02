@@ -1759,69 +1759,75 @@ class _HomePageState extends State<HomePage>
     } else if (_weatherData != null &&
         _weatherData!.dailyForecast != null &&
         _weatherData!.dailyForecast!.isNotEmpty) {
-      return Column(
-        children: [
-          _locationHeader(),
-          Expanded(
-            child: ListView.builder(
-              itemCount: _weatherData!.dailyForecast!.length,
-              itemBuilder: (context, index) {
-                final dailyData = _weatherData!.dailyForecast![index];
-                // Format the date
-                final date = dailyData.date;
-                final formattedDate = '${date.day}/${date.month}/${date.year}';
-                return Card(
-                  margin: const EdgeInsets.symmetric(
-                    vertical: 4,
-                    horizontal: 8,
+      return SingleChildScrollView(
+        child: Column(
+          children: [
+            _locationHeader(),
+
+            // Weekly Temperature Chart Section
+            Container(
+              margin: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.95),
+                borderRadius: BorderRadius.circular(16.0),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    spreadRadius: 1,
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
                   ),
-                  color: Colors.white.withOpacity(0.9),
-                  elevation: 4,
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // Date
-                        Text(
-                          formattedDate,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        // Temperature range
-                        Column(
-                          children: [
-                            Text(
-                              'Min: ${dailyData.minTemperature.toStringAsFixed(1)}°C',
-                              style: const TextStyle(color: Colors.black87),
-                            ),
-                            Text(
-                              'Max: ${dailyData.maxTemperature.toStringAsFixed(1)}°C',
-                              style: const TextStyle(color: Colors.black87),
-                            ),
-                          ],
-                        ),
-                        // Weather description
-                        Flexible(
-                          child: Text(
-                            dailyData.description,
-                            style: TextStyle(
-                              color: Colors.grey[700],
-                              fontSize: 12,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ],
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '7-Day Temperature Trend',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
                     ),
                   ),
-                );
-              },
+                  const SizedBox(height: 16),
+                  SizedBox(height: 250, child: _buildWeeklyTemperatureChart()),
+                ],
+              ),
             ),
-          ),
-        ],
+
+            // Weekly Forecast List
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Text(
+                      '7-Day Detailed Forecast',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                  ListView.builder(
+                    physics: const NeverScrollableScrollPhysics(),
+                    shrinkWrap: true,
+                    itemCount: _weatherData!.dailyForecast!.length,
+                    itemBuilder: (context, index) {
+                      final dailyData = _weatherData!.dailyForecast![index];
+                      return _buildWeeklyForecastCard(dailyData, index);
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       );
     } else if (_weatherData != null) {
       return Container(
@@ -1856,5 +1862,332 @@ class _HomePageState extends State<HomePage>
     } else {
       return _buildDefaultContent();
     }
+  }
+
+  // Build temperature chart for the Weekly tab
+  Widget _buildWeeklyTemperatureChart() {
+    if (_weatherData == null ||
+        _weatherData!.dailyForecast == null ||
+        _weatherData!.dailyForecast!.isEmpty) {
+      return const Center(
+        child: Text(
+          'No weekly temperature data available',
+          style: TextStyle(color: Colors.grey),
+        ),
+      );
+    }
+
+    final minSpots = <FlSpot>[];
+    final maxSpots = <FlSpot>[];
+    final labels = <String>[];
+
+    // Days of the week
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+    for (int i = 0; i < _weatherData!.dailyForecast!.length && i < 7; i++) {
+      final forecast = _weatherData!.dailyForecast![i];
+      minSpots.add(FlSpot(i.toDouble(), forecast.minTemperature));
+      maxSpots.add(FlSpot(i.toDouble(), forecast.maxTemperature));
+
+      // Get day of week
+      final dayIndex = (forecast.date.weekday - 1) % 7; // Convert to 0-6 index
+      labels.add(dayNames[dayIndex]);
+    }
+
+    return LineChart(
+      LineChartData(
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: true,
+          getDrawingHorizontalLine: (value) {
+            return const FlLine(color: Colors.grey, strokeWidth: 0.5);
+          },
+          getDrawingVerticalLine: (value) {
+            return const FlLine(color: Colors.grey, strokeWidth: 0.5);
+          },
+        ),
+        titlesData: FlTitlesData(
+          show: true,
+          rightTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+          topTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 30,
+              getTitlesWidget: (double value, TitleMeta meta) {
+                final index = value.toInt();
+                if (index >= 0 && index < labels.length) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Text(
+                      labels[index],
+                      style: const TextStyle(
+                        color: Colors.grey,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  );
+                }
+                return const Text('');
+              },
+            ),
+          ),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              interval: 5,
+              getTitlesWidget: (double value, TitleMeta meta) {
+                return Text(
+                  '${value.toInt()}°',
+                  style: const TextStyle(
+                    color: Colors.grey,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 10,
+                  ),
+                );
+              },
+              reservedSize: 32,
+            ),
+          ),
+        ),
+        borderData: FlBorderData(
+          show: true,
+          border: Border.all(color: const Color(0xff37434d)),
+        ),
+        minX: 0,
+        maxX: (labels.length - 1).toDouble(),
+        minY:
+            minSpots.map((spot) => spot.y).reduce((a, b) => a < b ? a : b) - 3,
+        maxY:
+            maxSpots.map((spot) => spot.y).reduce((a, b) => a > b ? a : b) + 3,
+        lineBarsData: [
+          // Min temperature line
+          LineChartBarData(
+            spots: minSpots,
+            isCurved: true,
+            color: Colors.blue,
+            barWidth: 3,
+            isStrokeCapRound: true,
+            dotData: const FlDotData(show: true),
+            belowBarData: BarAreaData(show: false),
+          ),
+          // Max temperature line
+          LineChartBarData(
+            spots: maxSpots,
+            isCurved: true,
+            color: Colors.red,
+            barWidth: 3,
+            isStrokeCapRound: true,
+            dotData: const FlDotData(show: true),
+            belowBarData: BarAreaData(show: false),
+          ),
+        ],
+        lineTouchData: LineTouchData(
+          enabled: true,
+          touchTooltipData: LineTouchTooltipData(
+            getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
+              return touchedBarSpots.map((barSpot) {
+                final index = barSpot.x.toInt();
+                final isMinTemp = barSpot.barIndex == 0;
+                final tempType = isMinTemp ? 'Min' : 'Max';
+                if (index >= 0 && index < labels.length) {
+                  return LineTooltipItem(
+                    '${labels[index]}\n$tempType: ${barSpot.y.toStringAsFixed(1)}°C',
+                    TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  );
+                }
+                return null;
+              }).toList();
+            },
+            getTooltipColor: (touchedSpot) => Colors.black87.withOpacity(0.8),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Build weekly forecast card for each day
+  Widget _buildWeeklyForecastCard(DailyForecast dailyData, int index) {
+    const dayNames = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+    final dayIndex = (dailyData.date.weekday - 1) % 7;
+    final dayName = dayNames[dayIndex];
+
+    // Format the date
+    final formattedDate =
+        '${dailyData.date.day}/${dailyData.date.month}/${dailyData.date.year}';
+
+    // Determine if it's today or tomorrow
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final cardDate = DateTime(
+      dailyData.date.year,
+      dailyData.date.month,
+      dailyData.date.day,
+    );
+
+    String dayLabel = dayName;
+    if (cardDate == today) {
+      dayLabel = 'Today';
+    } else if (cardDate == today.add(const Duration(days: 1))) {
+      dayLabel = 'Tomorrow';
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6.0),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.95),
+        borderRadius: BorderRadius.circular(16.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Day and date row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      dayLabel,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    Text(
+                      formattedDate,
+                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+                // Weather icon and description
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      _getWeatherEmoji(dailyData.icon),
+                      style: const TextStyle(fontSize: 32),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      dailyData.description.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey[700],
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.5,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Temperature information
+            Container(
+              padding: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.blue.shade50, Colors.red.shade50],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ),
+                borderRadius: BorderRadius.circular(12.0),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Row(
+                children: [
+                  // Min temperature
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Icon(Icons.thermostat, color: Colors.blue, size: 24),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Min',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.blue.shade700,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          '${dailyData.minTemperature.toStringAsFixed(1)}°C',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue.shade800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Separator
+                  Container(height: 50, width: 1, color: Colors.grey.shade400),
+
+                  // Max temperature
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Icon(Icons.thermostat, color: Colors.red, size: 24),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Max',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.red.shade700,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          '${dailyData.maxTemperature.toStringAsFixed(1)}°C',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red.shade800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
