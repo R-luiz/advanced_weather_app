@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'dart:async';
 import 'services/location_service.dart';
 import 'services/weather_service.dart';
 import 'models/city_suggestion.dart';
@@ -39,6 +40,10 @@ class _HomePageState extends State<HomePage>
   final LocationService _locationService = LocationService();
   final WeatherService _weatherService = WeatherService();
 
+  // Debouncing timer for search suggestions
+  Timer? _debounceTimer;
+  static const Duration _debounceDuration = Duration(milliseconds: 500);
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -66,13 +71,32 @@ class _HomePageState extends State<HomePage>
                     controller: _searchController,
                     decoration: InputDecoration(
                       labelText: 'Search for a city',
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.search),
-                        onPressed: _searchLocation,
+                      hintText: 'e.g., London, Paris, New York',
+                      suffixIcon: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_searchController.text.isNotEmpty)
+                            IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() {
+                                  _citySuggestions = [];
+                                });
+                              },
+                            ),
+                          IconButton(
+                            icon: const Icon(Icons.search),
+                            onPressed: _searchLocation,
+                          ),
+                        ],
                       ),
                       border: const OutlineInputBorder(),
                     ),
                     onSubmitted: (_) => _searchLocation(),
+                    onChanged:
+                        (_) =>
+                            setState(() {}), // Trigger rebuild for clear button
                   ),
                 ),
 
@@ -92,23 +116,68 @@ class _HomePageState extends State<HomePage>
                 ),
               ],
             ),
-          ),
-
-          // City suggestions
-          if (_citySuggestions.isNotEmpty)
+          ), // City suggestions
+          if (_citySuggestions.isNotEmpty || _isLoadingSuggestions)
             Container(
-              height: 200,
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              color: Colors.grey[200],
+              constraints: const BoxConstraints(maxHeight: 250),
+              margin: const EdgeInsets.symmetric(horizontal: 8.0),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(8.0),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.2),
+                    spreadRadius: 1,
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
               child:
                   _isLoadingSuggestions
-                      ? const Center(child: CircularProgressIndicator())
-                      : ListView.builder(
+                      ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: CircularProgressIndicator(),
+                        ),
+                      )
+                      : ListView.separated(
+                        shrinkWrap: true,
                         itemCount: _citySuggestions.length,
+                        separatorBuilder:
+                            (context, index) =>
+                                Divider(height: 1, color: Colors.grey.shade200),
                         itemBuilder: (context, index) {
                           final suggestion = _citySuggestions[index];
                           return ListTile(
-                            title: Text(suggestion.toString()),
+                            dense: true,
+                            leading: const Icon(
+                              Icons.location_city,
+                              color: Colors.blue,
+                              size: 20,
+                            ),
+                            title: Text(
+                              suggestion.name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            subtitle: Text(
+                              suggestion.region != null &&
+                                      suggestion.region!.isNotEmpty
+                                  ? '${suggestion.region}, ${suggestion.country}'
+                                  : suggestion.country,
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 12,
+                              ),
+                            ),
+                            trailing: const Icon(
+                              Icons.arrow_forward_ios,
+                              size: 14,
+                              color: Colors.grey,
+                            ),
                             onTap: () => _searchByCitySuggestion(suggestion),
                           );
                         },
@@ -197,42 +266,57 @@ class _HomePageState extends State<HomePage>
 
   // Debounce mechanism to prevent too many API calls
   Future<void> _onSearchChanged() async {
-    if (_searchController.text.length > 2) {
-      // Only search if text is long enough
-      setState(() {
-        _isLoadingSuggestions = true;
-      });
+    // Cancel previous timer
+    _debounceTimer?.cancel();
 
-      try {
-        final suggestions = await _weatherService.getCitySuggestions(
-          _searchController.text,
-        );
+    // Set new timer
+    _debounceTimer = Timer(_debounceDuration, () async {
+      final query = _searchController.text.trim();
+
+      if (query.length >= 2) {
         setState(() {
-          _citySuggestions = suggestions;
-          _isLoadingSuggestions = false;
-        });
-      } catch (e) {
-        setState(() {
+          _isLoadingSuggestions = true;
           _citySuggestions = [];
-          _isLoadingSuggestions = false;
         });
 
-        // Only show error if the search field still has text and widget is still mounted
-        if (_searchController.text.isNotEmpty && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error fetching suggestions: ${e.toString()}'),
-              backgroundColor: Colors.orange,
-            ),
-          );
+        try {
+          final suggestions = await _weatherService.getCitySuggestions(query);
+
+          // Only update if the search text hasn't changed
+          if (_searchController.text.trim() == query && mounted) {
+            setState(() {
+              _citySuggestions = suggestions;
+              _isLoadingSuggestions = false;
+            });
+          }
+        } catch (e) {
+          if (mounted && _searchController.text.trim() == query) {
+            setState(() {
+              _citySuggestions = [];
+              _isLoadingSuggestions = false;
+            });
+
+            // Show error only if search field still has text
+            if (query.isNotEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error fetching suggestions: ${e.toString()}'),
+                  backgroundColor: Colors.orange,
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            }
+          }
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _citySuggestions = [];
+            _isLoadingSuggestions = false;
+          });
         }
       }
-    } else {
-      setState(() {
-        _citySuggestions = [];
-        _isLoadingSuggestions = false;
-      });
-    }
+    });
   }
 
   // Try to get the current location of the user
@@ -346,7 +430,16 @@ class _HomePageState extends State<HomePage>
 
   // Search using the entered text directly
   Future<void> _searchLocation() async {
-    if (_searchController.text.isEmpty) return;
+    final query = _searchController.text.trim();
+    if (query.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a city name'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
 
     setState(() {
       _isLoadingWeather = true;
@@ -355,9 +448,7 @@ class _HomePageState extends State<HomePage>
     });
 
     try {
-      final weather = await _weatherService.getWeatherByCity(
-        _searchController.text,
-      );
+      final weather = await _weatherService.getWeatherByCity(query);
       setState(() {
         _weatherData = weather;
         _displayText = 'Weather for ${weather.cityName}';
@@ -420,6 +511,7 @@ class _HomePageState extends State<HomePage>
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();

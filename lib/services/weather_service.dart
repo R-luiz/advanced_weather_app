@@ -213,25 +213,145 @@ class WeatherService {
 
     // Get weather data based on coordinates
     return getWeatherByCoordinates(position.latitude, position.longitude);
-  }
+  } // Get city suggestions as the user types in the search bar
 
-  // Get city suggestions as the user types in the search bar
   Future<List<CitySuggestion>> getCitySuggestions(String query) async {
-    if (query.isEmpty) {
+    if (query.trim().isEmpty || query.trim().length < 2) {
       return [];
     }
 
-    final response = await http.get(
-      Uri.parse('$_geocodingUrl?q=$query&limit=$_maxResults&appid=$_apiKey'),
+    // Clean the query - remove extra spaces and normalize
+    final cleanQuery = query.trim().toLowerCase();
+
+    try {
+      // Use a higher limit to get more results for better filtering
+      final response = await http
+          .get(
+            Uri.parse(
+              '$_geocodingUrl?q=${Uri.encodeComponent(query)}&limit=20&appid=$_apiKey',
+            ),
+          )
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        final suggestions =
+            data.map((json) => CitySuggestion.fromJson(json)).toList();
+
+        // Remove duplicates and improve relevance
+        return _filterAndRankSuggestions(suggestions, cleanQuery);
+      } else {
+        throw Exception(
+          'Failed to load city suggestions: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      if (e.toString().contains('TimeoutException')) {
+        throw Exception('Search timeout. Please try again.');
+      }
+      rethrow;
+    }
+  }
+
+  /// Filters suggestions to remove duplicates and ranks them by relevance
+  List<CitySuggestion> _filterAndRankSuggestions(
+    List<CitySuggestion> suggestions,
+    String query,
+  ) {
+    // Remove duplicates using Map to track unique cities
+    final uniqueMap = <String, CitySuggestion>{};
+
+    for (final suggestion in suggestions) {
+      final key = suggestion.uniqueId;
+      // Only add if we haven't seen this city before, or if this one has a better score
+      if (!uniqueMap.containsKey(key)) {
+        uniqueMap[key] = suggestion;
+      } else {
+        // If we have a duplicate, keep the one with the better relevance score
+        final existingScore = _calculateRelevanceScore(uniqueMap[key]!, query);
+        final newScore = _calculateRelevanceScore(suggestion, query);
+        if (newScore > existingScore) {
+          uniqueMap[key] = suggestion;
+        }
+      }
+    }
+
+    // Convert to list and sort by relevance
+    final filteredList = uniqueMap.values.toList();
+
+    filteredList.sort(
+      (a, b) => _calculateRelevanceScore(
+        b,
+        query,
+      ).compareTo(_calculateRelevanceScore(a, query)),
     );
 
-    if (response.statusCode == 200) {
-      final List<dynamic> data = jsonDecode(response.body);
-      return data.map((json) => CitySuggestion.fromJson(json)).toList();
-    } else {
-      throw Exception(
-        'Failed to load city suggestions: ${response.statusCode}',
-      );
+    // Return only the top results according to _maxResults
+    return filteredList.take(_maxResults).toList();
+  }
+
+  /// Calculates relevance score for ranking suggestions
+  int _calculateRelevanceScore(CitySuggestion suggestion, String query) {
+    int score = 0;
+    final cityName = suggestion.name.toLowerCase().trim();
+    final region = (suggestion.region ?? '').toLowerCase().trim();
+    final country = suggestion.country.toLowerCase().trim();
+    final normalizedQuery = query.toLowerCase().trim();
+
+    // Exact match gets highest score
+    if (cityName == normalizedQuery) {
+      score += 1000; // Very high score for exact matches
     }
+    // Starts with query gets high score
+    else if (cityName.startsWith(normalizedQuery)) {
+      score += 800;
+      // Bonus for shorter names (likely more important cities)
+      if (cityName.length <= normalizedQuery.length + 3) {
+        score += 100;
+      }
+    }
+    // Contains query gets medium score
+    else if (cityName.contains(normalizedQuery)) {
+      score += 400;
+      // Bonus if the match is near the beginning
+      final index = cityName.indexOf(normalizedQuery);
+      if (index <= 2) {
+        score += 200;
+      }
+    }
+
+    // Check if query matches region/state
+    if (region.isNotEmpty) {
+      if (region == normalizedQuery) {
+        score += 300;
+      } else if (region.startsWith(normalizedQuery)) {
+        score += 150;
+      } else if (region.contains(normalizedQuery)) {
+        score += 75;
+      }
+    }
+
+    // Check if query matches country
+    if (country == normalizedQuery) {
+      score += 200;
+    } else if (country.startsWith(normalizedQuery)) {
+      score += 100;
+    } else if (country.contains(normalizedQuery)) {
+      score += 50;
+    }
+
+    // Prefer well-known major cities (shorter names often indicate major cities)
+    if (cityName.length <= 8) {
+      score += 50;
+    } else if (cityName.length <= 12) {
+      score += 25;
+    }
+
+    // Bonus for cities with regions (often more important/specific)
+    if (region.isNotEmpty) {
+      score += 10;
+    }
+
+    return score;
   }
 }
