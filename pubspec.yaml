@@ -35,8 +35,8 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   http: ^1.1.0  # For API requests
-  geolocator: ^10.0.0  # For getting device location
-  fl_chart: ^0.69.0  # For temperature charts
+  geolocator: ^14.0.1  # For getting device location
+  fl_chart: ^1.0.0  # For temperature charts
 
 dev_dependencies:
   flutter_test:
