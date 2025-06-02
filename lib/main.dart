@@ -1220,44 +1220,46 @@ class _HomePageState extends State<HomePage>
     } else if (_weatherData != null &&
         _weatherData!.hourlyForecast != null &&
         _weatherData!.hourlyForecast!.isNotEmpty) {
-      return Column(
-        children: [
-          _locationHeader(),
-          // Temperature Chart Section
-          Container(
-            margin: const EdgeInsets.all(16.0),
-            padding: const EdgeInsets.all(16.0),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.95),
-              borderRadius: BorderRadius.circular(16.0),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  spreadRadius: 1,
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  '24-Hour Temperature Trend',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+      return SingleChildScrollView(
+        child: Column(
+          children: [
+            _locationHeader(),
+            // Temperature Chart Section
+            Container(
+              margin: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.95),
+                borderRadius: BorderRadius.circular(16.0),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    spreadRadius: 1,
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
                   ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(height: 200, child: _buildTemperatureChart()),
-              ],
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '24-Hour Temperature Trend',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(height: 200, child: _buildTemperatureChart()),
+                ],
+              ),
             ),
-          ),
-          // Detailed Hourly Forecast Cards
-          Expanded(
-            child: ListView.builder(
+            // Detailed Hourly Forecast Cards
+            ListView.builder(
+              physics: const NeverScrollableScrollPhysics(),
+              shrinkWrap: true,
               padding: const EdgeInsets.symmetric(
                 horizontal: 8.0,
                 vertical: 8.0,
@@ -1395,8 +1397,8 @@ class _HomePageState extends State<HomePage>
                 );
               },
             ),
-          ),
-        ],
+          ],
+        ),
       );
     } else if (_weatherData != null) {
       return Container(
@@ -1525,13 +1527,54 @@ class _HomePageState extends State<HomePage>
     final spots = <FlSpot>[];
     final labels = <String>[];
 
-    // Take up to 24 hours of data for the chart
-    final dataToShow = _weatherData!.hourlyForecast!.take(24).toList();
+    // Create a full 24-hour data structure
+    final now = DateTime.now();
+    final startOfDay = DateTime(now.year, now.month, now.day);
 
-    for (int i = 0; i < dataToShow.length; i++) {
-      final hourlyData = dataToShow[i];
-      spots.add(FlSpot(i.toDouble(), hourlyData.temperature));
-      labels.add('${hourlyData.time.hour.toString().padLeft(2, '0')}:00');
+    // Create 24 data points for each hour of the day
+    for (int hour = 0; hour < 24; hour++) {
+      final hourTime = startOfDay.add(Duration(hours: hour));
+      labels.add('${hour.toString().padLeft(2, '0')}:00');
+
+      // Find matching forecast data for this hour
+      HourlyForecast? matchingForecast;
+      for (final forecast in _weatherData!.hourlyForecast!) {
+        if (forecast.time.hour == hour &&
+            forecast.time.day == hourTime.day &&
+            forecast.time.month == hourTime.month &&
+            forecast.time.year == hourTime.year) {
+          matchingForecast = forecast;
+          break;
+        }
+      }
+
+      // Use forecast data if available, otherwise interpolate or use a default
+      if (matchingForecast != null) {
+        spots.add(FlSpot(hour.toDouble(), matchingForecast.temperature));
+      } else {
+        // If no data for this hour, try to interpolate from available data
+        // or use the current temperature as fallback
+        double temperature = _weatherData!.temperature;
+
+        // Try to find the closest available forecast data
+        HourlyForecast? closestForecast;
+        int minTimeDiff = 25; // More than 24 hours
+
+        for (final forecast in _weatherData!.hourlyForecast!) {
+          final timeDiff = (forecast.time.hour - hour).abs();
+          if (timeDiff < minTimeDiff) {
+            minTimeDiff = timeDiff;
+            closestForecast = forecast;
+          }
+        }
+
+        if (closestForecast != null && minTimeDiff <= 3) {
+          // Use closest forecast if within 3 hours
+          temperature = closestForecast.temperature;
+        }
+
+        spots.add(FlSpot(hour.toDouble(), temperature));
+      }
     }
 
     if (spots.isEmpty) {
@@ -1557,7 +1600,7 @@ class _HomePageState extends State<HomePage>
           drawVerticalLine: true,
           drawHorizontalLine: true,
           horizontalInterval: tempRange > 0 ? tempRange / 4 : 5,
-          verticalInterval: dataToShow.length > 12 ? 4 : 2,
+          verticalInterval: 4,
           getDrawingHorizontalLine: (value) {
             return const FlLine(color: Colors.grey, strokeWidth: 0.5);
           },
@@ -1577,10 +1620,10 @@ class _HomePageState extends State<HomePage>
             sideTitles: SideTitles(
               showTitles: true,
               reservedSize: 30,
-              interval: dataToShow.length > 12 ? 4 : 2,
+              interval: 4, // Show every 4 hours (0, 4, 8, 12, 16, 20)
               getTitlesWidget: (double value, TitleMeta meta) {
                 final index = value.toInt();
-                if (index >= 0 && index < labels.length) {
+                if (index >= 0 && index < labels.length && index % 4 == 0) {
                   return Padding(
                     padding: const EdgeInsets.only(top: 8.0),
                     child: Text(
@@ -1620,7 +1663,7 @@ class _HomePageState extends State<HomePage>
           border: Border.all(color: Colors.grey.withOpacity(0.3)),
         ),
         minX: 0,
-        maxX: (dataToShow.length - 1).toDouble(),
+        maxX: 23,
         minY: minTemp - margin,
         maxY: maxTemp + margin,
         lineBarsData: [
